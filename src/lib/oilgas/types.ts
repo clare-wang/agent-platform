@@ -56,6 +56,14 @@ export interface StepVersion {
   note?: string;
 }
 
+export interface FileAttachment {
+  id: string;
+  name: string;
+  size: number;          // bytes
+  type: string;          // mime type
+  category: "image" | "document" | "data" | "other";
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -65,6 +73,16 @@ export interface ChatMessage {
   // optional rich payload
   kind?: "text" | "task-plan" | "task-pause" | "task-done" | "agent-collab";
   meta?: Record<string, unknown>;
+  attachments?: FileAttachment[];
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+  agentId?: AgentId | "multi";  // primary agent if any
 }
 
 export interface TaskParams {

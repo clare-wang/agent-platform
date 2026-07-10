@@ -12,13 +12,15 @@ import {
 import { useOilGasStore } from "@/lib/oilgas/store";
 import { getAgent } from "@/lib/oilgas/data";
 import { AgentAvatar } from "@/lib/oilgas/icons";
-import type { Task } from "@/lib/oilgas/types";
+import { AttachmentBar, toAttachment, fileIcon, formatSize } from "./AttachmentBar";
+import type { FileAttachment, Task } from "@/lib/oilgas/types";
 import { cn } from "@/lib/utils";
 
 export function AgentChatPanel({ task }: { task: Task }) {
   const agent = getAgent(task.agentId);
   const { addTaskMessage } = useOilGasStore();
   const [input, setInput] = React.useState("");
+  const [attachments, setAttachments] = React.useState<FileAttachment[]>([]);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -26,18 +28,28 @@ export function AgentChatPanel({ task }: { task: Task }) {
   }, [task.messages.length]);
 
   const send = () => {
-    if (!input.trim()) return;
-    addTaskMessage(task.id, { role: "user", content: input.trim() });
+    if (!input.trim() && attachments.length === 0) return;
+    addTaskMessage(task.id, {
+      role: "user",
+      content: input.trim(),
+      attachments: attachments.length > 0 ? attachments : undefined,
+    });
     setInput("");
+    setAttachments([]);
     // simulate agent ack
     setTimeout(() => {
       addTaskMessage(task.id, {
         role: "assistant",
         agentId: agent.id,
-        content: "已收到您的指令。当前任务序列执行中，您可在右侧查看进度，或在任务暂停时调整参数。",
+        content: attachments.length > 0
+          ? `已收到您的指令及 ${attachments.length} 个附件。当前任务序列执行中，您可在右侧查看进度，或在任务暂停时调整参数。`
+          : "已收到您的指令。当前任务序列执行中，您可在右侧查看进度，或在任务暂停时调整参数。",
       });
     }, 800);
   };
+
+  const addFiles = (files: File[]) => setAttachments((prev) => [...prev, ...files.map(toAttachment)]);
+  const removeAtt = (id: string) => setAttachments((prev) => prev.filter((a) => a.id !== id));
 
   return (
     <div className="h-full flex flex-col bg-card border-r border-border">
@@ -46,10 +58,7 @@ export function AgentChatPanel({ task }: { task: Task }) {
         <div className="flex items-start gap-2.5">
           <AgentAvatar agentId={agent.id} icon={agent.icon} accent={agent.accent} size={40} />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-bold text-foreground truncate">{agent.name}</h3>
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 shrink-0">{agent.intelligence}</Badge>
-            </div>
+            <h3 className="text-sm font-bold text-foreground truncate">{agent.name}</h3>
             <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug mt-0.5">{agent.domain}</p>
           </div>
         </div>
@@ -66,11 +75,25 @@ export function AgentChatPanel({ task }: { task: Task }) {
       <div className="flex-1 overflow-y-auto scroll-thin" ref={scrollRef}>
         <div className="p-3 space-y-3">
           {task.messages.map((m) => (
-            <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
               {m.role === "user" ? (
-                <div className="max-w-[88%] rounded-xl rounded-tr-sm bg-primary text-primary-foreground px-2.5 py-1.5 text-xs shadow-sm">
-                  {m.content}
-                </div>
+                <>
+                  {m.attachments && m.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-1 justify-end max-w-[88%]">
+                      {m.attachments.map((f) => (
+                        <div key={f.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 border border-primary/30 text-[9px] max-w-[140px]">
+                          <span className="text-primary shrink-0">{fileIcon(f.category)}</span>
+                          <span className="truncate text-foreground">{f.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {m.content && (
+                    <div className="max-w-[88%] rounded-xl rounded-tr-sm bg-primary text-primary-foreground px-2.5 py-1.5 text-xs shadow-sm">
+                      {m.content}
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="max-w-[88%] space-y-1">
                   <div className="flex items-center gap-1.5">
@@ -99,6 +122,19 @@ export function AgentChatPanel({ task }: { task: Task }) {
       {/* Input */}
       <div className="border-t border-border p-2.5">
         <div className="relative rounded-lg border border-border bg-background focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15 transition-all">
+          {attachments.length > 0 && (
+            <div className="px-2 pt-2 pb-1 flex flex-wrap gap-1 border-b border-border/50">
+              {attachments.map((f) => (
+                <div key={f.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted/70 border border-border text-[9px] max-w-[140px]">
+                  <span className="text-primary shrink-0">{fileIcon(f.category)}</span>
+                  <span className="truncate text-foreground">{f.name}</span>
+                  <button onClick={() => removeAtt(f.id)} className="shrink-0 text-muted-foreground hover:text-red-600" aria-label="移除">
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -109,9 +145,12 @@ export function AgentChatPanel({ task }: { task: Task }) {
             placeholder="与智能体对话，可补充需求或调整任务..."
             className="w-full resize-none bg-transparent px-2.5 pt-2 pb-8 text-xs outline-none placeholder:text-muted-foreground/70 scroll-thin"
           />
+          <div className="absolute bottom-1.5 left-1.5">
+            <AttachmentBar attachments={attachments} onAdd={addFiles} onRemove={removeAtt} compact />
+          </div>
           <Button
             onClick={send}
-            disabled={!input.trim()}
+            disabled={!input.trim() && attachments.length === 0}
             size="icon"
             className="absolute bottom-1.5 right-1.5 h-7 w-7 rounded-md bg-primary hover:bg-primary/90"
           >

@@ -10,7 +10,27 @@ import { NewTaskDialog } from "@/components/oilgas/NewTaskDialog";
 
 export default function Page() {
   const { mode, sidebarOpen } = useOilGasStore();
-  const [newOpen, setNewOpen] = React.useState(false);
+  const [newTaskOpen, setNewTaskOpen] = React.useState(false);
+
+  // In agent mode, the sidebar "新建任务" button (data-agent-new) and the empty-state button
+  // (dispatches 'open-new-task' event) both open the NewTaskDialog.
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest("[data-agent-new]") as HTMLElement | null;
+      if (btn) {
+        e.preventDefault();
+        setNewTaskOpen(true);
+      }
+    };
+    const onEvent = () => setNewTaskOpen(true);
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("open-new-task", onEvent);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("open-new-task", onEvent);
+    };
+  }, []);
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
@@ -20,7 +40,7 @@ export default function Page() {
         <div
           className={`shrink-0 transition-all duration-200 overflow-hidden ${sidebarOpen ? "w-72" : "w-0"}`}
         >
-          <Sidebar onNewTask={() => setNewOpen(true)} />
+          <Sidebar />
         </div>
 
         {/* Main */}
@@ -29,7 +49,7 @@ export default function Page() {
         </main>
       </div>
 
-      <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} />
+      <NewTaskDialog open={newTaskOpen} onOpenChange={setNewTaskOpen} />
     </div>
   );
 }

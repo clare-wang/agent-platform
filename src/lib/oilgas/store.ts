@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AgentId, AppMode, ChatMessage, Task, TaskStep } from "./types";
+import type { AgentId, AppMode, ChatConversation, ChatMessage, Task, TaskStep } from "./types";
 import { LOGGING_TASK_STEPS, SEED_TASKS, getAgent } from "./data";
 
 interface OilGasState {
@@ -9,24 +9,30 @@ interface OilGasState {
   tasks: Task[];
   activeTaskId: string | null;
   activeStepId: string | null;
-  // chat-mode conversation (separate from task messages)
-  chatMessages: ChatMessage[];
+  // chat-mode conversations (multiple, each with own message history)
+  conversations: ChatConversation[];
+  activeConversationId: string | null;
   sidebarOpen: boolean;
-  archivedView: boolean;
 
   setMode: (m: AppMode) => void;
   setAgent: (id: AgentId) => void;
   setSidebarOpen: (v: boolean) => void;
   setActiveTask: (id: string | null) => void;
   setActiveStepId: (id: string | null) => void;
-  setArchivedView: (v: boolean) => void;
+  setActiveConversation: (id: string | null) => void;
 
   createTask: (agentId: AgentId, title: string, instruction: string) => string;
   deleteTask: (id: string) => void;
   renameTask: (id: string, title: string) => void;
 
+  // chat conversations
+  createConversation: () => string;  // creates empty conversation, returns id
+  deleteConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  addConversationMessage: (convId: string, msg: Omit<ChatMessage, "id" | "createdAt">) => void;
+  getActiveConversation: () => ChatConversation | null;
+
   addTaskMessage: (taskId: string, msg: Omit<ChatMessage, "id" | "createdAt">) => void;
-  addChatMessage: (msg: Omit<ChatMessage, "id" | "createdAt">) => void;
 
   // step control
   setStepStatus: (taskId: string, stepId: string, status: TaskStep["status"], duration?: number) => void;
@@ -100,34 +106,59 @@ export const useOilGasStore = create<OilGasState>()(
       tasks: SEED_TASKS,
       activeTaskId: SEED_TASKS[0]?.id ?? null,
       activeStepId: null,
-      chatMessages: [
+      conversations: [
         {
-          id: uid("cm"),
-          role: "assistant",
-          agentId: "multi",
-          content:
-            "您好，欢迎进入井位部署智能决策平台。您可在对话模式中直接描述需求，使用 @测井评价 / @地震分析 / @地质认识 / @井位优选 调用对应智能体，或同时调用多个智能体协同工作。",
-          createdAt: nowStr(),
+          id: uid("conv"),
+          title: "MX12井储层评价对话",
+          createdAt: "2026-06-26 08:40",
+          updatedAt: "2026-06-26 09:05",
+          messages: [
+            {
+              id: uid("cm"),
+              role: "assistant",
+              agentId: "multi",
+              content:
+                "您好，欢迎进入勘探开发智能体。您可在对话模式中直接描述需求，使用 @测井评价 / @地震分析 / @地质认识 / @井位优选 调用对应智能体，或同时调用多个智能体协同工作。",
+              createdAt: "2026-06-26 08:40",
+            },
+            {
+              id: uid("cm"),
+              role: "user",
+              content: "@测井评价 评价MX12井及邻井灯影组四段储层质量",
+              createdAt: "2026-06-26 08:42",
+            },
+            {
+              id: uid("cm"),
+              role: "assistant",
+              agentId: "logging",
+              kind: "task-plan",
+              content: "已为您生成测井评价任务序列，共6个任务。可在智能体模式查看进度。",
+              createdAt: "2026-06-26 08:43",
+              meta: {},
+            },
+          ],
         },
       ],
+      activeConversationId: null,  // null = show welcome screen
       sidebarOpen: true,
-      archivedView: false,
 
       setMode: (m) => set({ mode: m }),
       setAgent: (id) => {
-        set({ currentAgentId: id, archivedView: false });
+        set({ currentAgentId: id });
         // auto select first task of this agent if none active or active belongs to other agent
-        const { tasks, activeTaskId } = get();
-        const active = tasks.find((t) => t.id === activeTaskId);
-        if (!active || active.agentId !== id) {
-          const first = tasks.find((t) => t.agentId === id);
-          set({ activeTaskId: first?.id ?? null });
+        const { tasks, activeTaskId, mode } = get();
+        if (mode === "agent") {
+          const active = tasks.find((t) => t.id === activeTaskId);
+          if (!active || active.agentId !== id) {
+            const first = tasks.find((t) => t.agentId === id);
+            set({ activeTaskId: first?.id ?? null });
+          }
         }
       },
       setSidebarOpen: (v) => set({ sidebarOpen: v }),
       setActiveTask: (id) => set({ activeTaskId: id, activeStepId: null }),
       setActiveStepId: (id) => set({ activeStepId: id }),
-      setArchivedView: (v) => set({ archivedView: v }),
+      setActiveConversation: (id) => set({ activeConversationId: id }),
 
       createTask: (agentId, title, instruction) => {
         const id = uid("task");
@@ -204,10 +235,56 @@ export const useOilGasStore = create<OilGasState>()(
           ),
         })),
 
-      addChatMessage: (msg) =>
+      // ---- Chat conversations ----
+      createConversation: () => {
+        const id = uid("conv");
+        const conv: ChatConversation = {
+          id,
+          title: "新对话",
+          messages: [],
+          createdAt: nowStr(),
+          updatedAt: nowStr(),
+        };
         set((s) => ({
-          chatMessages: [...s.chatMessages, { ...msg, id: uid("cm"), createdAt: nowStr() }],
+          conversations: [conv, ...s.conversations],
+          activeConversationId: id,
+        }));
+        return id;
+      },
+
+      deleteConversation: (id) =>
+        set((s) => {
+          const conversations = s.conversations.filter((c) => c.id !== id);
+          const activeConversationId = s.activeConversationId === id ? null : s.activeConversationId;
+          return { conversations, activeConversationId };
+        }),
+
+      renameConversation: (id, title) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => (c.id === id ? { ...c, title, updatedAt: nowStr() } : c)),
         })),
+
+      addConversationMessage: (convId, msg) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  updatedAt: nowStr(),
+                  title: c.messages.length === 0 && msg.content
+                    ? msg.content.slice(0, 24)
+                    : c.title,
+                  messages: [...c.messages, { ...msg, id: uid("cm"), createdAt: nowStr() }],
+                }
+              : c
+          ),
+        })),
+
+      getActiveConversation: () => {
+        const { conversations, activeConversationId } = get();
+        if (!activeConversationId) return null;
+        return conversations.find((c) => c.id === activeConversationId) ?? null;
+      },
 
       setStepStatus: (taskId, stepId, status, duration) =>
         set((s) => ({
@@ -297,13 +374,14 @@ export const useOilGasStore = create<OilGasState>()(
         })),
     }),
     {
-      name: "oilgas-well-platform-v1",
+      name: "oilgas-well-platform-v2",
       partialize: (s) => ({
         mode: s.mode,
         currentAgentId: s.currentAgentId,
         tasks: s.tasks,
         activeTaskId: s.activeTaskId,
-        chatMessages: s.chatMessages,
+        conversations: s.conversations,
+        activeConversationId: s.activeConversationId,
         sidebarOpen: s.sidebarOpen,
       }),
     }

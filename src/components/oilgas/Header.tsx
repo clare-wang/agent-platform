@@ -3,7 +3,6 @@
 import * as React from "react";
 import { PanelLeft, Plus, ChevronDown, Check, Bell, Search, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -70,7 +69,6 @@ export function Header() {
             <AgentAvatar agentId={current.id} icon={current.icon} accent={current.accent} size={26} />
             <div className="hidden sm:block text-left leading-tight">
               <div className="text-xs font-semibold text-foreground">{current.shortName}智能体</div>
-              <div className="text-[10px] text-muted-foreground">{current.intelligence}</div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
           </Button>
@@ -95,7 +93,6 @@ export function Header() {
                 </div>
                 <div className="text-[10px] text-muted-foreground truncate">{a.domain}</div>
               </div>
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 shrink-0">{a.intelligence}</Badge>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />

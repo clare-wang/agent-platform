@@ -10,26 +10,19 @@ import { AgentAvatar } from "@/lib/oilgas/icons";
 import { AgentChatPanel } from "./AgentChatPanel";
 import { TaskSequencePanel } from "./TaskSequencePanel";
 import { TaskDetailPanel } from "./TaskDetailPanel";
-import { NewTaskDialog } from "./NewTaskDialog";
-import { ArchiveDetailView } from "./ArchiveDetailView";
 import { Plus, Sparkles } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export function AgentMode() {
-  const { tasks, activeTaskId, archivedView } = useOilGasStore();
-  const [newOpen, setNewOpen] = React.useState(false);
+  const { tasks, activeTaskId } = useOilGasStore();
   const isMobile = useIsMobile();
 
   const activeTask = tasks.find((t) => t.id === activeTaskId) ?? null;
 
-  // Archived view
-  if (archivedView) {
-    return (
-      <div className="flex-1 h-full overflow-hidden">
-        <ArchiveDetailView />
-      </div>
-    );
-  }
+  // trigger NewTaskDialog via global event (page.tsx listens)
+  const triggerNew = () => {
+    window.dispatchEvent(new CustomEvent("open-new-task"));
+  };
 
   if (!activeTask) {
     return (
@@ -43,7 +36,7 @@ export function AgentMode() {
             选择左侧智能体，描述您的勘探需求，智能体将自动拆解为任务序列并执行
           </p>
           <button
-            onClick={() => setNewOpen(true)}
+            onClick={triggerNew}
             className="mt-4 inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow-sm transition-colors"
           >
             <Plus className="w-4 h-4" />新建任务
@@ -61,13 +54,11 @@ export function AgentMode() {
             ))}
           </div>
         </div>
-        <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} />
       </div>
     );
   }
 
   if (isMobile) {
-    // Mobile: stack into tabs-like single column with the detail panel prioritized
     return (
       <div className="flex-1 h-full overflow-hidden">
         <TaskDetailPanel task={activeTask} />
@@ -76,21 +67,18 @@ export function AgentMode() {
   }
 
   return (
-    <>
-      <ResizablePanelGroup direction="horizontal" className="flex-1 h-full">
-        <ResizablePanel defaultSize={22} minSize={17} maxSize={30}>
-          <AgentChatPanel task={activeTask} />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={24} minSize={18} maxSize={32}>
-          <TaskSequencePanel task={activeTask} />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={54} minSize={38}>
-          <TaskDetailPanel task={activeTask} />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-      <NewTaskDialog open={newOpen} onOpenChange={setNewOpen} />
-    </>
+    <ResizablePanelGroup direction="horizontal" className="flex-1 h-full">
+      <ResizablePanel defaultSize={22} minSize={17} maxSize={30}>
+        <AgentChatPanel task={activeTask} />
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={24} minSize={18} maxSize={32}>
+        <TaskSequencePanel task={activeTask} />
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={54} minSize={38}>
+        <TaskDetailPanel task={activeTask} />
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
