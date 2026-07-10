@@ -39,8 +39,7 @@ export function Header() {
           </svg>
         </div>
         <div className="hidden md:block leading-tight">
-          <div className="text-sm font-bold text-foreground">井位部署智能决策平台</div>
-          <div className="text-[10px] text-muted-foreground">Intelligent Well Location Deployment</div>
+          <div className="text-sm font-bold text-foreground">勘探开发智能体</div>
         </div>
       </div>
 
